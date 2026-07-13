@@ -2067,9 +2067,8 @@ async function startWhatsApp(chatId = ownerTelegramId, phoneNumber, slotId = '1'
         }, 1000);
         state.timer.unref?.();
     });
-    // Fortress security pipeline needs presence events for its behavioral
-    // antibot check (compose-with-no-history flagging). No prior listener
-    // existed for this event — this is purely additive.
+    // Re-emit presence updates onto the internal event bus so anti/presence-
+    // based features can subscribe. Purely additive; safe with no listeners.
     sock.ev.on('presence.update', ({ id, presences }) => {
         if (!id) return;
         try {

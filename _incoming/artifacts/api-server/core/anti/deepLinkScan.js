@@ -1,6 +1,8 @@
 'use strict';
-// core/security/deepLinkScan.js
+// core/anti/deepLinkScan.js
 // ─── DEEP ANTI-LINK — RECURSIVE PROTOBUF INSPECTION ───────────────────────────
+// Merged into antiEngine.checkAntiLink / checkAntiInviteLink so the single
+// .antilink toggle covers deep protobuf + obfuscation cases.
 //
 // The existing antiEngine.checkAntiLink only looks at ctx.text/ctx.caption
 // (extendedTextMessage / image-video captions). It never looks inside poll

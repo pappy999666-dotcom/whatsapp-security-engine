@@ -18,8 +18,6 @@ const { getKernel } = require('./core/runtimeKernel');
 const permissionEngine = require('./modules/permissionEngine');
 const antiConfig = require('./core/anti/antiConfig');
 const { startAntiHook } = require('./core/anti/antiHook');
-const securityConfig = require('./core/security/securityConfig');
-const securityPipeline = require('./core/security/securityPipeline');
 const waSocketRegistry = require('./modules/waSocketRegistry');
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -87,8 +85,6 @@ async function bootEliteOperator() {
         permissionEngine.init();
         antiConfig.init();
         startAntiHook();
-        securityConfig.init();
-        securityPipeline.init();
 
         const kernel = getKernel({ logger, engine: require('./core/engine') });
         kernel.start();
@@ -98,7 +94,7 @@ async function bootEliteOperator() {
         tempCleaner.start();
         healthMonitor.start();
 
-        // 👈 NEW: Connect to our new MongoDB fortress first!
+        // Connect to MongoDB first.
         await connectDB();
 
         let tgBot;

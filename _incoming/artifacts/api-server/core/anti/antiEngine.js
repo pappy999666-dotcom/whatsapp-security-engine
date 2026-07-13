@@ -40,6 +40,10 @@
 
 const logger = require('../logger');
 const { getAntiConfig, hasAnyAntiEnabled } = require('./antiConfig');
+// Deep recursive protobuf link scanner — folded into antiLink so a single
+// .antilink toggle also catches links hidden inside poll options, list rows,
+// view-once wrappers, and common obfuscation ("site dot com", zero-width chars).
+const deepLinkScan = require('./deepLinkScan');
 
 // ─── Flood tracking: Map<groupJid, Map<senderJid, [timestamps]>> ─────────────
 const _floodMap = new Map();
@@ -103,6 +107,15 @@ const _noop = { triggered: false };
 
 function checkAntiInviteLink(cfg, ctx) {
     if (!cfg.antiInviteLink && !cfg.antiLink) return _noop;
+    // Deep scan first: catches invite links buried in poll options, list rows,
+    // view-once wrappers, or hidden with obfuscation ("chat . whatsapp . com").
+    if (ctx.rawMessage) {
+        const scan = deepLinkScan.scanMessage(ctx.rawMessage);
+        if (scan.inviteLinks.length) {
+            const via = scan.source[0] ? ` (in: "${scan.source[0]}")` : '';
+            return _match('antiInviteLink', `WhatsApp invite link detected: ${scan.inviteLinks[0]}${via}`);
+        }
+    }
     const links = _extractInviteLinks(ctx.text || ctx.caption || '');
     if (!links.length) return _noop;
     return _match('antiInviteLink', `WhatsApp invite link detected: ${links[0]}`);
@@ -110,6 +123,16 @@ function checkAntiInviteLink(cfg, ctx) {
 
 function checkAntiLink(cfg, ctx) {
     if (!cfg.antiLink) return _noop;
+    // Deep recursive protobuf scan (poll options, list rows, view-once, obfuscation).
+    // This is the merged deep-antilink capability — no separate command needed.
+    if (ctx.rawMessage) {
+        const scan = deepLinkScan.scanMessage(ctx.rawMessage);
+        const deepUnallowed = (scan.matches || []).filter((l) => !_isDomainAllowed(l, cfg.allowedDomains));
+        if (deepUnallowed.length) {
+            const via = scan.source[0] ? ` (in: "${scan.source[0]}")` : '';
+            return _match('antiLink', `Hidden/obfuscated link detected: ${deepUnallowed[0]}${via}`);
+        }
+    }
     const text = ctx.text || ctx.caption || '';
     const links = _extractLinks(text).filter((l) => !/chat\.whatsapp\.com\//i.test(l));
     INVITE_LINK_RE.lastIndex = 0;

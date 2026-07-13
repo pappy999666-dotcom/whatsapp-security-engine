@@ -78,6 +78,7 @@ function startAntiHook() {
         const ctx = {
             groupJid:          jid,
             senderJid:         sender,
+            rawMessage:        msg.message, // enables deep recursive antilink scan
             text:              bodyText,
             caption,
             messageType:       _getMsgType(msg),
