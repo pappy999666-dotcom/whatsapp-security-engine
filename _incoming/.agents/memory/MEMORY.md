@@ -1,0 +1,3 @@
+- [Pappy Bot renovation source](pappy-bot-source.md) — full source lives at github.com/pappy999666-dotcom/verbose-fishstick; clone with git, never trust webFetch markdown for exact code.
+- [Pappy Bot node isolation](pappy-bot-node-isolation.md) — strict rule: only the global owner (config.ownerWhatsAppJids) may cross WA node boundaries; per-node sudo/owner must never reach other nodes.
+- [Pappy Bot Category-A bug fixes status](pappy-bot-category-a-bugs.md) — verified against real code (not the renovation plan's assumptions) before fixing; plan was stale on 2 of 3 bugs.
