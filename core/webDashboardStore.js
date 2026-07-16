@@ -47,7 +47,15 @@ async function createAccount(user, phone) {
   await execute(sql`INSERT INTO web_accounts (id,user_id,global_owner_id,phone_number,session_key,status) VALUES (${accountId},${user.id},${user.global_owner_id},${clean},${sessionKey},'pairing') ON CONFLICT (user_id,phone_number) DO UPDATE SET status='pairing', session_key=EXCLUDED.session_key`);
   return rows(await execute(sql`SELECT * FROM web_accounts WHERE user_id=${user.id} AND phone_number=${clean} LIMIT 1`))[0];
 }
+async function getAccount(userId, accountId) { return rows(await execute(sql`SELECT * FROM web_accounts WHERE id=${accountId} AND user_id=${userId} LIMIT 1`))[0] || null; }
 async function updateAccount(userId, accountId, status) { await execute(sql`UPDATE web_accounts SET status=${status}, last_active_at=now() WHERE id=${accountId} AND user_id=${userId}`); }
+async function accountAction(user, accountId, action) {
+  const account = await getAccount(user.id, accountId);
+  if (!account) { const error = new Error('Account not found'); error.status = 404; throw error; }
+  if (!['disconnect','restart'].includes(action)) { const error = new Error('Unsupported account action'); error.status = 400; throw error; }
+  await updateAccount(user.id, accountId, action === 'disconnect' ? 'disconnected' : 'reconnecting');
+  await log(user, 'pairing', `+${account.phone_number} ${action} requested`, 'info', accountId);
+}
 async function log(user, type, message, level='info', accountId=null) { await execute(sql`INSERT INTO web_activity (user_id,global_owner_id,account_id,type,message,level) VALUES (${user.id},${user.global_owner_id},${accountId},${type},${message},${level})`); }
 async function addLinks(user, input, source='manual') {
   const links = [...new Set(String(input || '').match(/https?:\/\/[^\s]+/g) || [])].slice(0,100);
@@ -57,4 +65,5 @@ async function addLinks(user, input, source='manual') {
 async function addScan(user,target) { const scanId=id('scan'); await execute(sql`INSERT INTO web_radar_scans (id,user_id,global_owner_id,target_url,status,result,completed_at) VALUES (${scanId},${user.id},${user.global_owner_id},${target},'completed',${JSON.stringify({valid:/chat\.whatsapp\.com|whatsapp\.com\/channel/.test(target),source:'web'})}::jsonb,now())`); await log(user,'radar','Radar scan completed'); return scanId; }
 async function saveCommand(user, accountId, command, response) { await execute(sql`INSERT INTO web_command_runs (user_id,global_owner_id,account_id,command,response) VALUES (${user.id},${user.global_owner_id},${accountId || null},${command},${response})`); await log(user,'commands',`Command executed: ${command.slice(0,80)}`); }
 async function saveSettings(user, data) { await execute(sql`UPDATE web_settings SET auto_reconnect=${Boolean(data.autoReconnect)}, notifications_enabled=${Boolean(data.notifications)}, command_prefix=${String(data.prefix || '.').slice(0,3)}, privacy_mode=${Boolean(data.privacy)}, updated_at=now() WHERE user_id=${user.id}`); await log(user,'settings','Settings synchronized'); }
-module.exports={ database,getUser,upsertGithubUser,dashboard,createAccount,updateAccount,log,addLinks,addScan,saveCommand,saveSettings };
+async function exportUserData(user) { return { exportedAt:new Date().toISOString(), globalOwnerId:user.global_owner_id, ...(await dashboard(user)) }; }
+module.exports={ database,getUser,upsertGithubUser,dashboard,createAccount,getAccount,updateAccount,accountAction,exportUserData,log,addLinks,addScan,saveCommand,saveSettings };
