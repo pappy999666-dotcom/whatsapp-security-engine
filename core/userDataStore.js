@@ -4,7 +4,7 @@ const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
 
-const DATA_ROOT = path.resolve(__dirname, '../data');
+const DATA_ROOT = path.resolve(process.env.PAPPY_DATA_ROOT || path.join(__dirname, '../data'));
 const USERS_ROOT = path.join(DATA_ROOT, 'users');
 const GLOBAL_ROOT = path.join(DATA_ROOT, 'global');
 const HOT_WRITE_DELAY_MS = 2000;
