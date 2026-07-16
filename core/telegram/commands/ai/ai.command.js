@@ -30,8 +30,8 @@ module.exports = {
         }
     },
 
-    register(bot, deps) {
-        const { getCustomPrompt, saveCustomPrompt, PROMPT_FILE, fsp } = deps;
+    register(bot) {
+        const engineFor = (ctx) => createAiEngine(String(ctx.from.id));
 
         bot.action("cmd_ai_help", (ctx) => {
             ctx.answerCbQuery();
@@ -42,8 +42,9 @@ module.exports = {
         });
 
         bot.action("cmd_ai_prompt", async (ctx) => {
-            ctx.answerCbQuery();
-            const current = getCustomPrompt() || "(using default prompt)";
+            await ctx.answerCbQuery();
+            const config = await engineFor(ctx).getConfig();
+            const current = config.customPrompt || "(using default prompt)";
             const preview = current.length > 300 ? current.slice(0, 300) + "..." : current;
             ctx.editMessageText(
                 `🧠 <b>AI PROMPT EDITOR</b>\n\n<b>Current prompt:</b>\n<code>${preview.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</code>\n\n<i>Send your new prompt as a message now.\nOr tap Reset to go back to default.</i>`,
@@ -56,9 +57,24 @@ module.exports = {
             ctx.session.awaitingPrompt = true;
         });
 
+        bot.on('text', async (ctx, next) => {
+            if (!ctx.session?.awaitingPrompt || String(ctx.message?.text || '').startsWith('/')) return next?.();
+            const prompt = String(ctx.message.text || '').trim();
+            if (!prompt) return ctx.reply('Prompt cannot be empty.');
+            const engine = engineFor(ctx);
+            const config = await engine.getConfig();
+            if (!config.provider || !config.model) {
+                ctx.session.awaitingPrompt = false;
+                return ctx.reply('Configure an AI provider and model before setting a custom prompt.');
+            }
+            await engine.configure({ customPrompt: prompt });
+            ctx.session.awaitingPrompt = false;
+            return ctx.reply('AI prompt saved for your nodes only.');
+        });
+
         bot.action("cmd_ai_prompt_reset", async (ctx) => {
-            ctx.answerCbQuery("Prompt reset.");
-            try { await fsp.unlink(PROMPT_FILE); } catch { /* already gone */ }
+            await ctx.answerCbQuery("Prompt reset.");
+            await engineFor(ctx).configure({ customPrompt: '' });
             ctx.editMessageText("✅ <b>AI prompt reset to default.</b>", {
                 parse_mode: "HTML",
                 reply_markup: { inline_keyboard: [[{ text: "🔙 Back to Hub", callback_data: "menu_main" }]] }

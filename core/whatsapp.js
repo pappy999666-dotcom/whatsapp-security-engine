@@ -1834,7 +1834,16 @@ async function startWhatsApp(chatId = ownerTelegramId, phoneNumber, slotId = '1'
                         }
                     }
                     const prompt = cleanText || 'Describe this image';
-                    response = await ai.analyzeImage(imgBuffer, prompt, sender);
+                    const imageUrl = `data:${hasImage ? (msg.message.imageMessage.mimetype || 'image/jpeg') : (quotedImageMsg.mimetype || 'image/jpeg')};base64,${imgBuffer.toString('base64')}`;
+                    response = await unifiedAi.complete({
+                        chatJid: jid,
+                        prompt,
+                        senderName: sender,
+                        groupName: isGroup ? jid : '',
+                        botName: nodeState.botName || 'Pappy',
+                        isGroup,
+                        imageUrl,
+                    });
                 } else if (hasVoice) {
                     const audioBuffer = await downloadMediaMessage(msg, 'buffer', {}, { logger: null, reuploadRequest: sock.updateMediaMessage });
                     response = await ai.analyzeVoice(audioBuffer, sender);
@@ -1863,9 +1872,10 @@ async function startWhatsApp(chatId = ownerTelegramId, phoneNumber, slotId = '1'
                     });
                 } else return;
 
-                // Unified AI output is treated as content, never as an operating-system instruction.
-                if (response.startsWith('EXECUTE_COMMAND:')) {
-                    response = 'I cannot execute operating-system commands from chat.';
+                // Unified AI output is content only. Provider text must never become a
+                // command, media action, or operating-system instruction.
+                if (/^(EXECUTE_COMMAND|PLAY|GENERATE_IMAGE|SPEAK|SEARCH_VIDEO|SEND_STICKER):/i.test(response)) {
+                    response = 'I cannot execute actions embedded in AI-generated text.';
                 }
 
                 if (false && response.startsWith('EXECUTE_COMMAND:')) {
@@ -1923,22 +1933,22 @@ async function startWhatsApp(chatId = ownerTelegramId, phoneNumber, slotId = '1'
                     }
                     return;
                 }
-                if (response.startsWith('PLAY:')) {
+                if (false && response.startsWith('PLAY:')) {
                     const musicModule = require('../plugins/pappy-music');
                     await musicModule.execute({ sock, msg, args: response.slice(5).trim().split(' '), text: `.play ${response.slice(5).trim()}`, user: { name: 'AI' }, botId });
                     return;
                 }
-                if (response.startsWith('GENERATE_IMAGE:')) {
+                if (false && response.startsWith('GENERATE_IMAGE:')) {
                     try { await sock.sendMessage(jid, { image: await ai.generateImage(response.slice(15).trim()), caption: '' }, { quoted: msg }); }
                     catch { await sendPremiumText(sock, jid, "couldn't generate that image", { quoted: msg }); }
                     return;
                 }
-                if (response.startsWith('SPEAK:')) {
+                if (false && response.startsWith('SPEAK:')) {
                     try { await sock.sendMessage(jid, { audio: await ai.textToSpeech(response.slice(6).trim()), mimetype: 'audio/mpeg', ptt: true }, { quoted: msg }); }
                     catch { await sendPremiumText(sock, jid, response.slice(6).trim(), { quoted: msg }); }
                     return;
                 }
-                if (response.startsWith('SEARCH_VIDEO:')) {
+                if (false && response.startsWith('SEARCH_VIDEO:')) {
                     try {
                         const { buffer, title, mimetype, url } = await ai.searchVideo(response.slice(13).trim());
                         try {
@@ -1954,7 +1964,7 @@ async function startWhatsApp(chatId = ownerTelegramId, phoneNumber, slotId = '1'
                     }
                     return;
                 }
-                if (response.startsWith('SEND_STICKER:')) {
+                if (false && response.startsWith('SEND_STICKER:')) {
                     try {
                         const description = response.slice(13).trim();
                         const cacheKey = Buffer.from(description).toString('base64').slice(0, 20);
