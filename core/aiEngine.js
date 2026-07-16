@@ -21,7 +21,37 @@ function providerDefaults(provider) { if (provider === 'openai') return 'https:/
 class AiEngine {
   constructor(tgUserId, options = {}) { this.tgUserId = String(tgUserId); this.store = userDataStore.bind(this.tgUserId); this.fetch = options.fetch || global.fetch; if (typeof this.fetch !== 'function') throw new AiEngineError('FETCH_UNAVAILABLE', 'A Fetch API implementation is required'); }
   async getConfig() { return this.store.get('ai'); }
-  async configure(input) { const provider = String(input.provider || '').toLowerCase(); if (!PROVIDERS.has(provider)) throw new AiEngineError('INVALID_PROVIDER', 'Unsupported AI provider'); const endpoint = await validateEndpoint(input.endpoint || providerDefaults(provider), provider); if (!String(input.model || '').trim()) throw new AiEngineError('INVALID_MODEL', 'An AI model is required'); const config = { provider, model: String(input.model).trim(), endpoint, apiKeyEncrypted: input.apiKey ? encryptApiKey(input.apiKey) : null, customPrompt: String(input.customPrompt || ''), groups: input.groups || {}, enabled: input.enabled !== false }; await this.store.set('ai', config); return { ...config, apiKeyEncrypted: config.apiKeyEncrypted ? '[encrypted]' : null }; }
+  async configure(input) {
+    const current = await this.getConfig();
+    const provider = String(input.provider || current.provider || '').toLowerCase();
+    if (!PROVIDERS.has(provider)) throw new AiEngineError('INVALID_PROVIDER', 'Unsupported AI provider');
+    const endpoint = await validateEndpoint(input.endpoint || current.endpoint || providerDefaults(provider), provider);
+    const model = String(input.model || current.model || '').trim();
+    if (!model) throw new AiEngineError('INVALID_MODEL', 'An AI model is required');
+    const config = {
+      ...current,
+      provider,
+      model,
+      endpoint,
+      apiKeyEncrypted: input.apiKey === undefined ? current.apiKeyEncrypted : (input.apiKey ? encryptApiKey(input.apiKey) : null),
+      customPrompt: input.customPrompt === undefined ? String(current.customPrompt || '') : String(input.customPrompt || ''),
+      groups: input.groups === undefined ? { ...(current.groups || {}) } : { ...(input.groups || {}) },
+      enabled: input.enabled === undefined ? true : input.enabled !== false,
+    };
+    await this.store.set('ai', config);
+    return { ...config, apiKeyEncrypted: config.apiKeyEncrypted ? '[encrypted]' : null };
+  }
+  async setGroupMode(chatJid, enabled) {
+    const jid = String(chatJid || '').trim();
+    if (!jid.endsWith('@g.us')) throw new AiEngineError('INVALID_GROUP', 'A WhatsApp group JID is required');
+    const config = await this.store.update('ai', (state) => ({ ...state, groups: { ...(state.groups || {}), [jid]: enabled === true } }));
+    return config.groups[jid] === true;
+  }
+  async isGroupEnabled(chatJid) { const config = await this.getConfig(); return config.enabled === true && config.groups?.[String(chatJid)] === true; }
+  async clearHistory(chatJid = null) {
+    if (!chatJid) return this.store.set('aiContexts', { chats: {} });
+    return this.store.update('aiContexts', (state) => { delete state.chats[String(chatJid)]; return state; });
+  }
   async clearCredentials() { return this.store.update('ai', (config) => ({ ...config, apiKeyEncrypted: null, enabled: false })); }
   async history(chatJid) { const all = await this.store.get('aiContexts'); const now = Date.now(); const messages = (all.chats?.[chatJid] || []).filter((item) => now - item.at < CONTEXT_TTL_MS).slice(-MAX_HISTORY_MESSAGES); if (messages.length !== (all.chats?.[chatJid] || []).length) { all.chats[chatJid] = messages; await this.store.set('aiContexts', all, { debounce: true }); } return messages; }
   buildSystemPrompt(config, context = {}) { const dynamic = [`Bot: ${context.botName || 'Pappy'}`, `Sender: ${context.senderName || 'Unknown'}`, `Chat: ${context.isGroup ? `group ${context.groupName || context.chatJid || ''}` : 'private'}`, `Time: ${new Date().toISOString()}`].join('\n'); return [BASE_PROMPT, config.customPrompt, dynamic].filter(Boolean).join('\n\n'); }

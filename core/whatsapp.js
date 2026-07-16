@@ -24,6 +24,8 @@ const { rememberPreviewHint } = require('./linkPreview');
 const { getYoutubeCookieArg } = require('./youtube');
 const { generateAnimatedSticker, generateTelegramSticker } = require('./stickerEngine');
 const { getKernel } = require('./runtimeKernel');
+const { createAiEngine } = require('./aiEngine');
+const pairingRegistry = require('../modules/pairingRegistry');
 const watchdog = require('./watchdog');
 
 const SESSIONS_PATH = path.join(__dirname, '../data/sessions');
@@ -1310,19 +1312,6 @@ async function startWhatsApp(chatId = ownerTelegramId, phoneNumber, slotId = '1'
             // Pre-warm group metadata cache via shared groupCache module
             groupCache.warmUp(sock);
 
-            // ── PRESENCE INDICATOR — tell WA the session is alive so it starts delivering messages
-            setTimeout(async () => {
-                try {
-                    await sock.sendPresenceUpdate('available');
-                    // Pulse available/unavailable every 4 min to keep WA delivering messages
-                    if (!global._presenceIntervals) global._presenceIntervals = new Map();
-                    if (global._presenceIntervals.has(sessionKey)) {
-                        clearInterval(global._presenceIntervals.get(sessionKey));
-                    }
-                    kernel.presenceManager.start(sessionKey, sock);
-                } catch {}
-            }, 3000);
-
             startSocketHeartbeat(sessionKey, sock, () => {
                 kernel.reconnectManager.schedule(
                     sessionKey,
@@ -1716,7 +1705,10 @@ async function startWhatsApp(chatId = ownerTelegramId, phoneNumber, slotId = '1'
         // Quoted image — user replied to an image with text like "make sticker" or "describe"
         const quotedImageMsg    = ctxInfo?.quotedMessage?.imageMessage || ctxInfo?.quotedMessage?.ephemeralMessage?.message?.imageMessage;
         const hasQuotedImage    = !!(quotedImageMsg) && !hasImage;
-        const pappyOn           = nodeState.pappyMode?.[jid] === true;
+        const unifiedAi = createAiEngine(String(chatId));
+        const pappyOn = isGroup
+            ? await unifiedAi.isGroupEnabled(jid).catch(() => nodeState.pappyMode?.[jid] === true)
+            : false;
         
         // Debug: log when sticker is detected
         if (hasSticker && pappyOn && isGroup) {
@@ -1859,10 +1851,24 @@ async function startWhatsApp(chatId = ownerTelegramId, phoneNumber, slotId = '1'
                 } else if (text) {
                     const cleanPrompt = text.replace(/@\d+/g, '').trim();
                     if (!cleanPrompt) return;
-                    response = await ai.generateText(cleanPrompt, sender);
+                    let groupName = '';
+                    if (isGroup) groupName = (await getCachedGroupMeta(sock, jid).catch(() => null))?.subject || '';
+                    response = await unifiedAi.complete({
+                        chatJid: jid,
+                        prompt: cleanPrompt,
+                        senderName: msg.pushName || sender,
+                        groupName,
+                        botName: 'Pappy',
+                        isGroup,
+                    });
                 } else return;
 
+                // Unified AI output is treated as content, never as an operating-system instruction.
                 if (response.startsWith('EXECUTE_COMMAND:')) {
+                    response = 'I cannot execute operating-system commands from chat.';
+                }
+
+                if (false && response.startsWith('EXECUTE_COMMAND:')) {
                     try {
                         const { exec } = require('child_process');
                         const util = require('util');
@@ -2103,16 +2109,20 @@ async function startWhatsApp(chatId = ownerTelegramId, phoneNumber, slotId = '1'
 }
 
 function setPappyMode(jid, value, phone) {
-    if (phone) {
-        const state = getNodeState(phone);
-        if (!state.pappyMode) state.pappyMode = {};
-        state.pappyMode[jid] = value;
-        saveNodeState(phone);
-    } else {
-        if (!botState.pappyMode) botState.pappyMode = {};
-        botState.pappyMode[jid] = value;
-        saveState();
-    }
+if (phone) {
+const state = getNodeState(phone);
+if (!state.pappyMode) state.pappyMode = {};
+state.pappyMode[jid] = value;
+saveNodeState(phone);
+const tgUserId = pairingRegistry.getUserIdByPhone(String(phone).replace(/[^0-9]/g, ''));
+if (tgUserId && String(jid).endsWith('@g.us')) {
+createAiEngine(tgUserId).setGroupMode(jid, value === true).catch((error) => logger.warn(`[AI] Could not persist group mode: ${error.message}`));
+}
+} else {
+if (!botState.pappyMode) botState.pappyMode = {};
+botState.pappyMode[jid] = value;
+saveState();
+}
 }
 
 module.exports = { startWhatsApp, activeSockets, loadState, saveState, botState, setPappyMode, getCommandPrefix, setCommandPrefix, getNodeMode, setNodeMode, getNodeState };

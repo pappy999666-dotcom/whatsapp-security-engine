@@ -46,6 +46,32 @@ test('isolates AI configuration and history by owner and chat', async () => {
   assert.equal((await second.history('chat-a')).length, 0);
 });
 
+test('preserves credentials and isolates group mode while reconfiguring', async () => {
+  await store.ensureUser('3004');
+  const engine = createAiEngine('3004', { fetch: async () => ({ ok: true, json: async () => ({ message: { content: 'OK' } }) }) });
+  await engine.configure({ provider: 'ollama', model: 'phi3:mini', apiKey: 'local-secret' });
+  const before = await engine.getConfig();
+  await engine.setGroupMode('group-one@g.us', true);
+  await engine.configure({ provider: 'ollama', model: 'llava:latest', customPrompt: 'Be brief.' });
+  const after = await engine.getConfig();
+  assert.equal(after.apiKeyEncrypted, before.apiKeyEncrypted);
+  assert.equal(await engine.isGroupEnabled('group-one@g.us'), true);
+  assert.equal(await engine.isGroupEnabled('group-two@g.us'), false);
+  await engine.setGroupMode('group-one@g.us', false);
+  assert.equal(await engine.isGroupEnabled('group-one@g.us'), false);
+});
+
+test('clears one chat history without affecting another', async () => {
+  await store.ensureUser('3005');
+  const engine = createAiEngine('3005', { fetch: async () => ({ ok: true, json: async () => ({ message: { content: 'OK' } }) }) });
+  await engine.configure({ provider: 'ollama', model: 'phi3:mini' });
+  await engine.complete({ chatJid: 'chat-one', prompt: 'one' });
+  await engine.complete({ chatJid: 'chat-two', prompt: 'two' });
+  await engine.clearHistory('chat-one');
+  assert.equal((await engine.history('chat-one')).length, 0);
+  assert.equal((await engine.history('chat-two')).length, 2);
+});
+
 test('rejects image requests for non-vision models', async () => {
   await store.ensureUser('3003');
   const engine = createAiEngine('3003', { fetch: async () => { throw new Error('must not call'); } });

@@ -1,21 +1,32 @@
 "use strict";
 // commands/ai/ai.command.js — AI chat + prompt management
 
+const { createAiEngine } = require('../../../aiEngine');
+
 module.exports = {
     name: "ai",
     requiredRole: "USER",
     cooldown: 5,
 
-    async handler({ ctx, args, deps }) {
-        const { ai } = deps;
-        if (!ai) return ctx.reply("AI is offline right now.");
+    async handler({ ctx, args }) {
         const prompt = args.join(" ").trim();
-        if (!prompt) return ctx.reply("just ask me something\nexample: /ai what is 2+2");
+        if (!prompt) return ctx.reply("Just ask me something.\nExample: /ai what is 2+2");
         try {
-            const response = await ai.generateText(prompt, String(ctx.from.id));
+            const engine = createAiEngine(String(ctx.from.id));
+            const response = await engine.complete({
+                chatJid: `telegram:${ctx.chat.id}`,
+                prompt,
+                senderName: ctx.from.first_name || ctx.from.username || String(ctx.from.id),
+                groupName: ctx.chat.type?.includes('group') ? ctx.chat.title : '',
+                botName: 'Pappy',
+                isGroup: ctx.chat.type?.includes('group') === true,
+            });
             await ctx.reply(response);
-        } catch (e) {
-            await ctx.reply(`couldn't reach AI: ${e.message}`);
+        } catch (error) {
+            const message = error.code === 'NOT_CONFIGURED'
+                ? 'AI is not configured yet. Open AI settings and add a provider and model.'
+                : `Could not reach AI: ${error.message}`;
+            await ctx.reply(message);
         }
     },
 
