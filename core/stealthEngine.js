@@ -3,8 +3,6 @@
 
 const logger = require('./logger');
 
-const INVISIBLES = ['\u200B', '\u200C', '\u200D', '\uFEFF'];
-
 const randomDelay = (min, max) => new Promise(resolve => setTimeout(resolve, Math.floor(Math.random() * (max - min + 1)) + min));
 
 const hesitate = async (baseMs = 1000) => {
@@ -39,33 +37,11 @@ const resolveSpintax = (text) => {
 const mutateMessage = (text) => {
     if (!text) return '';
     try {
-        // 1. Resolve Spintax FIRST
-        let mutated = resolveSpintax(text);
-        
-        // 2. Apply Personality
-        mutated = applyPersonality(mutated);
-        
-        // 3. Stealth Mutations (Safe Limits)
-        const strategy = Math.floor(Math.random() * 3);
-        switch (strategy) {
-            case 0:
-                const pre = INVISIBLES[Math.floor(Math.random() * INVISIBLES.length)];
-                const post = INVISIBLES[Math.floor(Math.random() * INVISIBLES.length)];
-                mutated = `${pre}${mutated}${post}`;
-                break;
-            case 1:
-                // Only injects spaces on 10% of words so it stays highly readable
-                mutated = mutated.split(' ').map(word => Math.random() > 0.90 ? `${word}\u2009` : `${word} `).join('').trim();
-                break;
-            case 2:
-                const insertPos = Math.floor(Math.random() * mutated.length);
-                mutated = mutated.slice(0, insertPos) + INVISIBLES[0] + mutated.slice(insertPos);
-                break;
-        }
-        return mutated;
-    } catch (err) {
-        // 🛡️ ZERO-CRASH FALLBACK: If mutation ever fails, just send the raw text!
-        return text; 
+        // Spintax is the only permitted mutation. Invisible characters and
+        // spacing tricks can corrupt content and increase account risk.
+        return resolveSpintax(String(text));
+    } catch {
+        return String(text);
     }
 };
 

@@ -19,6 +19,9 @@ const permissionEngine = require('./modules/permissionEngine');
 const antiConfig = require('./core/anti/antiConfig');
 const { startAntiHook } = require('./core/anti/antiHook');
 const waSocketRegistry = require('./modules/waSocketRegistry');
+const pairingRegistry = require('./modules/pairingRegistry');
+const userDataStore = require('./core/userDataStore');
+const { migrateLegacyData } = require('./core/dataMigration');
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ─── Health check HTTP server ─────────────────────────────────────────────────
@@ -82,6 +85,9 @@ async function isBootableSessionDir(sessionsDir, folder) {
 async function bootEliteOperator() {
     try {
         // ─── Init canonical modules ────────────────────────────────────────────
+        await userDataStore.init();
+        await pairingRegistry.load();
+        await migrateLegacyData(pairingRegistry, logger);
         permissionEngine.init();
         antiConfig.init();
         startAntiHook();

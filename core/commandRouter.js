@@ -12,6 +12,7 @@ const { enqueueHeavyCommand } = require('./commandScheduler');
 const { sendPremiumText } = require('./responseEngine');
 const { globalPrefix } = require('../config');
 const permissionEngine = require('../modules/permissionEngine');
+const { runPlugin } = require('./pluginRunner');
 
 const HEAVY_COMMANDS = new Set([
     '.godcast', '.gcast', '.ggstatus', '.setnewgcstatus',
@@ -259,11 +260,19 @@ class CommandRouter {
                         delayMs = await softWork.applySoftDelay(commandName, softWorkSenderKey);
                     }
 
-                    if (command.execute.length === 1) {
-                        await command.execute({ sock, msg, args, text, user: userProfile, isGroup, botId, abortSignal, softWorkDelay: delayMs });
-                    } else {
-                        await command.execute(sock, msg, args, userProfile, commandName, abortSignal);
-                    }
+                    await runPlugin({
+                        command,
+                        sock,
+                        msg,
+                        args,
+                        text,
+                        user: userProfile,
+                        isGroup,
+                        botId,
+                        commandName,
+                        abortSignal,
+                        softWorkDelay: delayMs,
+                    });
                 };
 
                 // Instant commands bypass concurrency gates

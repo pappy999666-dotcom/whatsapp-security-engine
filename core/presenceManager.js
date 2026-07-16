@@ -11,18 +11,19 @@ class PresenceManager {
         this.active = new Map();
     }
 
-    start(sessionKey, sock) {
-        if (this.active.has(sessionKey)) return;
-        const key = `presence:${sessionKey}`;
+    start(sessionKey, sock, targetJid) {
+        if (!targetJid || this.active.has(sessionKey)) return false;
+        const key = `presence:${sessionKey}:${targetJid}`;
         this.lifecycle.addInterval(key, async () => {
             try {
                 if (!sock?.user?.id) return;
-                await sock.sendPresenceUpdate?.('available');
+                await sock.sendPresenceUpdate?.('available', targetJid);
             } catch (err) {
                 this.logger?.warn?.(`[Presence] ${sessionKey}: ${err.message}`);
             }
         }, this.minIntervalMs);
         this.active.set(sessionKey, key);
+        return true;
     }
 
     stop(sessionKey) {
