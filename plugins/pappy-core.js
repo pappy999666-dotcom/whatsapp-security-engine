@@ -9,6 +9,7 @@ const { generateMenu } = require('../modules/menuEngine');
 const menuSongManager = require('../modules/menuSongManager');
 const logger = require('../core/logger');
 const { createContextInfo } = require('../core/linkPreview');
+const responses = require('../lib/responses');
 
 const bindDbPath = path.join(__dirname, '../data/stickerCmds.json');
 let stickerDbCache = null;
@@ -225,26 +226,16 @@ module.exports = {
 
         // ── PING ──────────────────────────────────────────────────────────────
         if (cmd === '.ping') {
-            const { uptime: fmt, mb } = require('../modules/uiTheme');
             const start = Date.now();
-            await sock.sendMessage(jid, { react: { text: '⚡', key: msg.key } }).catch(() => {});
+            await sock.sendMessage(jid, { react: { text: '🏓', key: msg.key } }).catch(() => {});
             const latency = Date.now() - start;
-            const ram = process.memoryUsage().heapUsed;
-            const qual = latency < 100 ? '🟢 Excellent' : latency < 300 ? '🟡 Good' : '🔴 High';
             return sock.sendMessage(jid, {
-                title: '⚡ PONG!',
-                headerText: '## PAPPY V2 — Speed Check',
-                contentText: '---',
-                table: [
-                    ['Metric', 'Value'],
-                    ['📶 Latency', `${latency}ms`],
-                    ['📊 Quality', qual],
-                    ['🕐 Uptime', fmt(process.uptime())],
-                    ['🧠 Memory', mb(ram)],
-                    ['🟢 Engine', 'ONLINE'],
-                ],
-                noHeading: false,
-                footerText: '⚡ Speed is a Feature — t.me/pappylung',
+                text: [
+                    '🏓 *Pong!*',
+                    responses.buildDivider(),
+                    `📡 Latency: *${latency}ms*`,
+                    '🔋 Status: *Online*',
+                ].join('\n'),
             }, { quoted: msg });
         }
 
