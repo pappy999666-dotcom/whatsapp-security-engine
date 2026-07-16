@@ -49,6 +49,11 @@ function getKernel({ logger, engine } = {}) {
     const retryQueue = new RetryQueue({ logger });
     const aiQueue = new AiQueue({ logger });
     const mediaQueue = new MediaQueue({ logger });
+    lifecycle.registerCleanup('runtime-queues', () => {
+        retryQueue.close();
+        aiQueue.close();
+        mediaQueue.close();
+    });
 
     const aiWorker = new AiWorker({ logger, aiQueue });
     const mediaWorker = new MediaWorker({ mediaQueue });
