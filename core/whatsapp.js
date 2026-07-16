@@ -1057,6 +1057,7 @@ async function startWhatsApp(chatId = ownerTelegramId, phoneNumber, slotId = '1'
 
                 const display = `${code.slice(0,4)}-${code.slice(4)}`;
                 sock._pairingCodeSent = true;
+                sock._pairingCodeValue = display;
                 sock._pairingCodeSentAt = Date.now();
                 logger.system(`[Pair] Code for +${cleanNumber}: ${display}`);
 
@@ -1109,7 +1110,8 @@ async function startWhatsApp(chatId = ownerTelegramId, phoneNumber, slotId = '1'
 
     // ─── CONNECTION HANDLING ───
     sock.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect } = update;
+        const { connection, lastDisconnect, qr } = update;
+        if (qr) sock._latestQr = qr;
         global._lastEventActivity.set(sessionKey, Date.now());
 
         if (connection === 'close') {

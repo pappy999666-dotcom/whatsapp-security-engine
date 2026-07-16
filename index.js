@@ -3,8 +3,8 @@
 
 const fs   = require('fs');
 const path = require('path');
-const http = require('http');
 const { startWhatsApp, activeSockets } = require('./core/whatsapp');
+const { createDashboardApp } = require('./core/webDashboard');
 const { startTelegram } = require('./core/telegram');
 const logger = require('./core/logger');
 const { ownerTelegramId } = require('./config');
@@ -28,22 +28,8 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // Serves GET /api/healthz on the PORT env var so the artifact proxy can
 // validate the service is alive without exposing any bot internals.
 const PORT = parseInt(process.env.PORT || '8080', 10);
-const _healthServer = http.createServer((req, res) => {
-    if (req.url === '/api/healthz' || req.url === '/api/health') {
-        const body = JSON.stringify({
-            status: 'ok',
-            nodes: waSocketRegistry.size(),
-            ts: Date.now(),
-        });
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(body);
-    } else {
-        res.writeHead(404);
-        res.end('Not Found');
-    }
-});
-_healthServer.listen(PORT, () => {
-    logger.info(`[Health] Listening on port ${PORT} → GET /api/healthz`);
+const _healthServer = createDashboardApp().listen(PORT, () => {
+    logger.info(`[Web] PAPPY Pairing Web listening on port ${PORT}`);
 });
 
 // 🛡️ ENTERPRISE CRASH GUARD
